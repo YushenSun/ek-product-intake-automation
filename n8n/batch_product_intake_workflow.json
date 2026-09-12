@@ -11,7 +11,7 @@
       "id": "ae8c1b17-0c64-4eb0-b6ad-799571e179fb",
       "name": "Supplier spreadsheet webhook",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2,
+      "typeVersion": 2.1,
       "position": [
         -900,
         0
@@ -145,17 +145,20 @@
             {
               "name": "notification_type",
               "value": "batch_automatic_success",
-              "type": "string"
+              "type": "string",
+              "id": "6b5100d2-41d1-4980-ac70-c5b1ad8d11ce"
             },
             {
               "name": "notification_message",
               "value": "Batch processed automatically; no human review required.",
-              "type": "string"
+              "type": "string",
+              "id": "dd1d4fab-15db-4fd4-b186-a604516f8d72"
             },
             {
               "name": "batch_id",
               "value": "={{ $json.batch_id }}",
-              "type": "string"
+              "type": "string",
+              "id": "72d68a2c-d5cc-4fb3-929d-b90dc30f569e"
             }
           ]
         },
@@ -165,7 +168,7 @@
       "id": "f070303c-581d-438d-9551-b9b169a5de7e",
       "name": "Automatic success placeholder",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
+      "typeVersion": 3.4,
       "position": [
         740,
         -260
@@ -210,22 +213,26 @@
             {
               "name": "notification_type",
               "value": "human_review_escalation",
-              "type": "string"
+              "type": "string",
+              "id": "2bb73c51-5801-402d-b003-f0a213fe0e9c"
             },
             {
               "name": "notification_message",
               "value": "Batch contains products needing human attention; open the Streamlit review queue.",
-              "type": "string"
+              "type": "string",
+              "id": "2d68bcc1-4296-4b52-8298-4e8522b22090"
             },
             {
               "name": "review_ui_url",
               "value": "={{ $json.review_ui_url }}",
-              "type": "string"
+              "type": "string",
+              "id": "9968897d-49ea-4a56-a487-263182861bbb"
             },
             {
               "name": "batch_id",
               "value": "={{ $json.batch_id }}",
-              "type": "string"
+              "type": "string",
+              "id": "25ce5539-abd9-4eea-8a8e-52520b31d839"
             }
           ]
         },
@@ -235,7 +242,7 @@
       "id": "5ca42d3d-f211-44e2-884d-0f1d3cce18dc",
       "name": "Review notification placeholder",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
+      "typeVersion": 3.4,
       "position": [
         740,
         -20
@@ -280,17 +287,20 @@
             {
               "name": "notification_type",
               "value": "batch_ingestion_error",
-              "type": "string"
+              "type": "string",
+              "id": "b472e249-ad42-41b0-83dc-02d73436408d"
             },
             {
               "name": "notification_message",
               "value": "One or more spreadsheet rows failed ingestion; inspect row_errors.",
-              "type": "string"
+              "type": "string",
+              "id": "acb29964-db0f-4d25-9f15-8d3de316353f"
             },
             {
               "name": "batch_id",
               "value": "={{ $json.batch_id }}",
-              "type": "string"
+              "type": "string",
+              "id": "88fb3404-5cc2-49ef-a400-059fc94225de"
             }
           ]
         },
@@ -300,7 +310,7 @@
       "id": "7a66398d-4843-4e33-9fca-179fb347247e",
       "name": "Ingestion alert placeholder",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 3,
+      "typeVersion": 3.4,
       "position": [
         740,
         220
@@ -318,7 +328,7 @@
       "id": "b431485f-79e7-4545-8b17-78285e3992a6",
       "name": "Return batch outcome",
       "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
+      "typeVersion": 1.4,
       "position": [
         500,
         430
