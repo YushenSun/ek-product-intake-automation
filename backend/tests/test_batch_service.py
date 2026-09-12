@@ -1,3 +1,4 @@
+from backend.app.extraction.providers import MockExtractionProvider
 from backend.app.models.domain import BatchStatus, ProductPatch, ProductStatus
 from backend.app.services.batch import BatchService
 
@@ -76,3 +77,39 @@ def test_batch_counts_preserve_historical_human_attribution(batch_service):
     assert refreshed.straight_through_approved == 0
     assert refreshed.ever_required_human_review == 1
     assert refreshed.human_approved == 1
+
+
+class FailOnSecondExtraction(MockExtractionProvider):
+    def __init__(self):
+        self.calls = 0
+
+    def extract(self, text: str, source_name: str):
+        self.calls += 1
+        if self.calls == 2:
+            raise RuntimeError("Synthetic row-level provider failure.")
+        return super().extract(text, source_name)
+
+
+def test_provider_exception_rolls_back_only_one_row_and_batch_continues(factory):
+    session = factory()
+    service = BatchService(session, FailOnSecondExtraction())
+    try:
+        content = (
+            HEADER
+            + "Before Failure,Demo,2000000000008,Home,Synthetic Supplier,2 EUR\n"
+            + "Provider Failure,Demo,2000000000015,Home,Synthetic Supplier,3 EUR\n"
+            + "After Failure,Demo,2000000000022,Home,Synthetic Supplier,4 EUR\n"
+        ).encode()
+
+        batch = service.create("provider-failure.csv", content)
+        products = service.products(batch.id)
+
+        assert batch.status == BatchStatus.COMPLETED_WITH_ERRORS
+        assert batch.total_rows == 3
+        assert batch.processed_rows == 2
+        assert batch.failed_rows == 1
+        assert [(error.row_number, error.code) for error in batch.row_errors] == [(3, "runtimeerror")]
+        assert [product.source_row_number for product in products] == [2, 4]
+        assert [product.product.product_name for product in products] == ["Before Failure", "After Failure"]
+    finally:
+        session.close()
