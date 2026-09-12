@@ -18,6 +18,9 @@ class ProductRecord(Base):
     __tablename__ = "products"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     status: Mapped[str] = mapped_column(String(32), index=True)
+    initial_status: Mapped[str] = mapped_column(String(32), index=True)
+    decision_source: Mapped[str] = mapped_column(String(32), index=True)
+    approval_source: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     product_json: Mapped[str] = mapped_column(Text)
     evidence_json: Mapped[str] = mapped_column(Text, default="[]")
     issues_json: Mapped[str] = mapped_column(Text, default="[]")
@@ -26,6 +29,11 @@ class ProductRecord(Base):
     source_preview: Mapped[str] = mapped_column(Text)
     processing_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     reviewer_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_required_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    correction_count: Mapped[int] = mapped_column(default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

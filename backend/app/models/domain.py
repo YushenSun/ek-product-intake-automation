@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 class ProductStatus(str, Enum):
     PROCESSING = "processing"
     REVIEW_REQUIRED = "review_required"
+    READY_FOR_APPROVAL = "ready_for_approval"
     APPROVED = "approved"
     REJECTED = "rejected"
 
@@ -76,6 +78,9 @@ class ProductPatch(BaseModel):
 class ProductResponse(BaseModel):
     id: str
     status: ProductStatus
+    initial_status: ProductStatus
+    decision_source: str
+    approval_source: str | None = None
     product: Product
     evidence: list[FieldEvidence] = Field(default_factory=list)
     issues: list[ValidationIssue] = Field(default_factory=list)
@@ -84,17 +89,24 @@ class ProductResponse(BaseModel):
     source_preview: str
     processing_ms: float | None = None
     reviewer_note: str | None = None
+    review_required_at: datetime | None = None
+    reviewed_at: datetime | None = None
+    approved_at: datetime | None = None
+    rejected_at: datetime | None = None
+    correction_count: int = 0
 
 
 class MetricsResponse(BaseModel):
     products_processed: int
-    automatically_approved: int
-    review_required: int
+    straight_through_approved: int
+    ever_required_human_review: int
+    currently_waiting_for_review: int
+    ready_for_approval: int
+    human_approved: int
     rejected: int
-    average_issues: float
+    straight_through_processing_rate: float
+    historical_human_review_rate: float
+    review_to_approval_rate: float
     average_processing_ms: float
-    human_review_rate: float
-    auto_approval_rate: float
     estimated_manual_minutes_avoided: float
     estimate_assumption: str
-

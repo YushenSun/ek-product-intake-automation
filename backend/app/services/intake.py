@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from time import perf_counter
 
 from sqlalchemy import select
@@ -21,7 +22,26 @@ class IntakeService:
 
     @staticmethod
     def _response(record: ProductRecord) -> ProductResponse:
-        return ProductResponse(id=record.id, status=ProductStatus(record.status), product=Product.model_validate(load(record.product_json)), evidence=load(record.evidence_json), issues=load(record.issues_json), source_name=record.source_name, source_type=record.source_type, source_preview=record.source_preview, processing_ms=record.processing_ms, reviewer_note=record.reviewer_note)
+        return ProductResponse(
+            id=record.id,
+            status=ProductStatus(record.status),
+            initial_status=ProductStatus(record.initial_status),
+            decision_source=record.decision_source,
+            approval_source=record.approval_source,
+            product=Product.model_validate(load(record.product_json)),
+            evidence=load(record.evidence_json),
+            issues=load(record.issues_json),
+            source_name=record.source_name,
+            source_type=record.source_type,
+            source_preview=record.source_preview,
+            processing_ms=record.processing_ms,
+            reviewer_note=record.reviewer_note,
+            review_required_at=record.review_required_at,
+            reviewed_at=record.reviewed_at,
+            approved_at=record.approved_at,
+            rejected_at=record.rejected_at,
+            correction_count=record.correction_count,
+        )
 
     def _find(self, product_id: str) -> ProductRecord:
         record = self.session.get(ProductRecord, product_id)
@@ -41,7 +61,7 @@ class IntakeService:
         return None
 
     @staticmethod
-    def _decide(issues: list[ValidationIssue]) -> ProductStatus:
+    def _initial_decision(issues: list[ValidationIssue]) -> ProductStatus:
         return ProductStatus.REVIEW_REQUIRED if any(issue.severity == Severity.ERROR for issue in issues) else ProductStatus.APPROVED
 
     def create(self, text: str, source_name: str, source_type: str) -> ProductResponse:
@@ -52,7 +72,24 @@ class IntakeService:
         duplicate = self._duplicate_issue(product)
         if duplicate:
             issues.append(duplicate)
-        record = ProductRecord(status=self._decide(issues).value, product_json=dump(product.model_dump()), evidence_json=dump([item.model_dump() for item in result.evidence]), issues_json=dump([item.model_dump(mode="json") for item in issues]), source_name=source_name, source_type=source_type, source_preview=text[:4000], processing_ms=round((perf_counter() - started) * 1000, 2))
+
+        now = datetime.now(timezone.utc)
+        initial_status = self._initial_decision(issues)
+        record = ProductRecord(
+            status=initial_status.value,
+            initial_status=initial_status.value,
+            decision_source="automatic" if initial_status == ProductStatus.APPROVED else "pending_review",
+            approval_source="automatic" if initial_status == ProductStatus.APPROVED else None,
+            review_required_at=now if initial_status == ProductStatus.REVIEW_REQUIRED else None,
+            approved_at=now if initial_status == ProductStatus.APPROVED else None,
+            product_json=dump(product.model_dump()),
+            evidence_json=dump([item.model_dump() for item in result.evidence]),
+            issues_json=dump([item.model_dump(mode="json") for item in issues]),
+            source_name=source_name,
+            source_type=source_type,
+            source_preview=text[:4000],
+            processing_ms=round((perf_counter() - started) * 1000, 2),
+        )
         self.session.add(record)
         self.session.commit()
         self.session.refresh(record)
@@ -73,18 +110,49 @@ class IntakeService:
         duplicate = self._duplicate_issue(product, exclude_id=record.id)
         if duplicate:
             issues.append(duplicate)
-        record.product_json, record.issues_json = dump(product.model_dump()), dump([item.model_dump(mode="json") for item in issues])
+
+        record.product_json = dump(product.model_dump())
+        record.issues_json = dump([item.model_dump(mode="json") for item in issues])
         record.reviewer_note = patch.reviewer_note
-        record.status = self._decide(issues).value
+        record.reviewed_at = datetime.now(timezone.utc)
+        record.correction_count += 1
+
+        has_errors = any(issue.severity == Severity.ERROR for issue in issues)
+        ever_required_review = record.review_required_at is not None
+        if has_errors:
+            record.status = ProductStatus.REVIEW_REQUIRED.value
+            record.review_required_at = record.review_required_at or record.reviewed_at
+            record.decision_source = "pending_review"
+        elif ever_required_review:
+            record.status = ProductStatus.READY_FOR_APPROVAL.value
+            record.decision_source = "pending_review"
+        else:
+            # This record was already approved automatically; a valid edit does
+            # not manufacture a second approval decision.
+            record.status = ProductStatus.APPROVED.value
+
         self.session.commit()
         return self._response(record)
 
     def set_status(self, product_id: str, status: ProductStatus) -> ProductResponse:
         record = self._find(product_id)
+        now = datetime.now(timezone.utc)
+
         if status == ProductStatus.APPROVED:
-            issues = [ValidationIssue.model_validate(i) for i in load(record.issues_json)]
+            issues = [ValidationIssue.model_validate(issue) for issue in load(record.issues_json)]
             if any(issue.severity == Severity.ERROR for issue in issues):
                 raise ValueError("Cannot approve while error-level validation issues remain; correct the record first.")
+            if record.review_required_at is not None:
+                record.decision_source = "human"
+                record.approval_source = "human"
+                record.reviewed_at = now
+            record.approved_at = now
+            record.rejected_at = None
+        elif status == ProductStatus.REJECTED:
+            record.decision_source = "human"
+            record.reviewed_at = now
+            record.rejected_at = now
+
         record.status = status.value
         self.session.commit()
         return self._response(record)

@@ -43,11 +43,26 @@ Files can be uploaded to `POST /products/upload` (CSV, XLSX, PDF, TXT). Plain te
 
 ## Safety and decision logic
 
-Only products with every required field, a valid EAN, no conflicts or duplicates, and no validation errors are auto-approved. Missing data, invalid codes, source conflicts, extraction failures, or food records without ingredients/allergens require review. Confidence is *not* a sole approval criterion. The mock provider sets confidence to `1.0` only when a field was directly labelled in the source; absent values mean the parser cannot substantiate a confidence. See [docs/architecture.md](docs/architecture.md).
+Only initially clean products with every required field, a valid EAN, no conflicts or duplicates, and no validation errors are approved automatically. Missing data, invalid codes, source conflicts, extraction failures, or food records without ingredients/allergens require review.
+
+For escalated records, **correction != approval**. Saving a correction reruns deterministic validation. Remaining errors keep the record in `review_required`; a valid corrected record becomes `ready_for_approval`. It becomes `approved` only after the reviewer calls the approval endpoint. The application records whether approval was straight-through or human-made, so **straight-through automated approval != human-reviewed approval**.
+
+Confidence is *not* a sole approval criterion. The mock provider sets confidence to `1.0` only when a field was directly labelled in the source; absent values mean the parser cannot substantiate a confidence. See [docs/architecture.md](docs/architecture.md).
 
 ## Evaluation and metrics
 
-`evals/evaluate.py` benchmarks the mock provider against synthetic ground truth. It reports extraction and normalization accuracy, validation detection, review and approval rates, false auto-approval rate, and latency. These are **synthetic benchmark metrics**, not Eberlein und Kunz results. `/metrics` supplies live PoC counts and a clearly labelled configurable time-saving estimate.
+`evals/evaluate.py` benchmarks the mock provider against synthetic ground truth. It reports extraction and normalization accuracy, validation detection, review and approval rates, false auto-approval rate, and latency. These are **synthetic benchmark metrics**, not Eberlein und Kunz results.
+
+`/metrics` distinguishes straight-through approvals from human approvals and uses persisted history for the historical review rate. The time-saving estimate applies only to straight-through records and remains a clearly labelled configurable assumption.
+
+## Schema update for existing local databases
+
+This PoC intentionally has no migration framework. The decision-history fields change the SQLite schema, so an existing local demo database must be recreated.
+
+- Local run: stop the app and delete `ek_intake.db`; the next startup recreates it.
+- Docker run: `docker compose down -v` removes the disposable SQLite and n8n demo volumes; then run `docker compose up --build`.
+
+Both operations delete existing PoC records. Export anything you want to keep first.
 
 ## Limitations and production path
 

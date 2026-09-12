@@ -11,7 +11,7 @@ from backend.app.config import settings
 from backend.app.extraction.providers import ExtractionProviderError, provider_from_settings
 from backend.app.models.domain import MetricsResponse, ProductPatch, ProductResponse, ProductStatus, ProductSubmission
 from backend.app.parsers import ParseError, parse_file, parse_text
-from backend.app.persistence.database import ProductRecord, SessionLocal, load
+from backend.app.persistence.database import ProductRecord, SessionLocal
 from backend.app.services.intake import IntakeService, NotFoundError
 
 
@@ -22,7 +22,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="EK Product Intake Automation", version="0.1.0", description="Synthetic-data-only product intake case-study PoC.", lifespan=lifespan)
+app = FastAPI(title="EK Product Intake Automation", version="0.2.0", description="Synthetic-data-only product intake case-study PoC.", lifespan=lifespan)
 
 
 def get_session():
@@ -127,8 +127,26 @@ def reject_product(product_id: str, service: IntakeService = Depends(get_service
 def metrics(session: Session = Depends(get_session)):
     records = session.scalars(select(ProductRecord)).all()
     total = len(records)
-    count = lambda state: sum(record.status == state.value for record in records)
-    average_issues = mean(len(load(record.issues_json)) for record in records) if records else 0.0
+    straight_through = sum(record.initial_status == ProductStatus.APPROVED.value for record in records)
+    ever_reviewed = sum(record.review_required_at is not None for record in records)
+    waiting = sum(record.status == ProductStatus.REVIEW_REQUIRED.value for record in records)
+    ready = sum(record.status == ProductStatus.READY_FOR_APPROVAL.value for record in records)
+    human_approved = sum(record.approved_at is not None and record.approval_source == "human" for record in records)
+    rejected = sum(record.rejected_at is not None for record in records)
     average_ms = mean(record.processing_ms or 0 for record in records) if records else 0.0
-    approved = count(ProductStatus.APPROVED)
-    return MetricsResponse(products_processed=total, automatically_approved=approved, review_required=count(ProductStatus.REVIEW_REQUIRED), rejected=count(ProductStatus.REJECTED), average_issues=round(average_issues, 2), average_processing_ms=round(average_ms, 2), human_review_rate=round(count(ProductStatus.REVIEW_REQUIRED) / total, 3) if total else 0, auto_approval_rate=round(approved / total, 3) if total else 0, estimated_manual_minutes_avoided=round(approved * settings.manual_minutes_per_product, 1), estimate_assumption=f"Illustrative only: {settings.manual_minutes_per_product} assumed manual minutes per safely auto-approved synthetic record.")
+
+    return MetricsResponse(
+        products_processed=total,
+        straight_through_approved=straight_through,
+        ever_required_human_review=ever_reviewed,
+        currently_waiting_for_review=waiting,
+        ready_for_approval=ready,
+        human_approved=human_approved,
+        rejected=rejected,
+        straight_through_processing_rate=round(straight_through / total, 3) if total else 0,
+        historical_human_review_rate=round(ever_reviewed / total, 3) if total else 0,
+        review_to_approval_rate=round(human_approved / ever_reviewed, 3) if ever_reviewed else 0,
+        average_processing_ms=round(average_ms, 2),
+        estimated_manual_minutes_avoided=round(straight_through * settings.manual_minutes_per_product, 1),
+        estimate_assumption=f"Illustrative only: {settings.manual_minutes_per_product} assumed manual minutes per straight-through approved synthetic record.",
+    )
