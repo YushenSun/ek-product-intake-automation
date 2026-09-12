@@ -1,0 +1,31 @@
+services:
+  backend:
+    build: .
+    command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: sqlite:////data/ek_intake.db
+      EXTRACTION_PROVIDER: ${EXTRACTION_PROVIDER:-mock}
+      OPENAI_COMPATIBLE_BASE_URL: ${OPENAI_COMPATIBLE_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    volumes: ["ek-data:/data"]
+  review-ui:
+    build: .
+    command: streamlit run review_ui/app.py --server.address 0.0.0.0 --server.port 8501
+    ports: ["8501:8501"]
+    environment:
+      API_BASE_URL: http://backend:8000
+    depends_on: [backend]
+  n8n:
+    image: n8nio/n8n:latest
+    ports: ["5678:5678"]
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678/
+    volumes: ["n8n-data:/home/node/.n8n"]
+volumes:
+  ek-data:
+  n8n-data:

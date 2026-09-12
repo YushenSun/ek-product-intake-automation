@@ -1,0 +1,14 @@
+{
+  "name": "EK Product Intake Automation (Synthetic Demo)",
+  "nodes": [
+    {"parameters": {"path": "ek-product-intake", "httpMethod": "POST", "responseMode": "lastNode"}, "id": "1", "name": "Supplier webhook", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [260, 300], "notes": "Demo trigger. Receive labelled supplier text only; send files to FastAPI upload endpoint in a production extension."},
+    {"parameters": {"url": "http://host.docker.internal:8000/products", "sendBody": true, "specifyBody": "json", "jsonBody": "={{ $json.body }}", "options": {}}, "id": "2", "name": "Create product in FastAPI", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [500, 300], "notes": "Calls the PoC API, which parses, extracts, validates, persists, and decides status."},
+    {"parameters": {"conditions": {"options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"}, "conditions": [{"leftValue": "={{ $json.status }}", "rightValue": "approved", "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}}, "id": "3", "name": "Auto-approved?", "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [740, 300], "notes": "Routes on FastAPI's deterministic decision. No n8n node independently approves a product."},
+    {"parameters": {"assignments": {"assignments": [{"name": "result", "value": "=Approved synthetic record: {{$json.id}}", "type": "string"}]}, "options": {}}, "id": "4", "name": "Log approved record", "type": "n8n-nodes-base.set", "typeVersion": 3, "position": [980, 220], "notes": "Placeholder downstream/export boundary for local demo."},
+    {"parameters": {"assignments": {"assignments": [{"name": "result", "value": "=Review required: {{$json.id}}; show in Streamlit queue", "type": "string"}]}, "options": {}}, "id": "5", "name": "Notify review queue", "type": "n8n-nodes-base.set", "typeVersion": 3, "position": [980, 400], "notes": "Generic notification substitute. A production flow may email/Teams-notify a role, not an individual."}
+  ],
+  "connections": {"Supplier webhook": {"main": [[{"node": "Create product in FastAPI", "type": "main", "index": 0}]]}, "Create product in FastAPI": {"main": [[{"node": "Auto-approved?", "type": "main", "index": 0}]]}, "Auto-approved?": {"main": [[{"node": "Log approved record", "type": "main", "index": 0}], [{"node": "Notify review queue", "type": "main", "index": 0}]]}},
+  "active": false,
+  "settings": {},
+  "versionId": "synthetic-demo-v1"
+}

@@ -1,0 +1,5 @@
+{
+  "source_name": "demo_problem_supplier.txt",
+  "source_type": "txt",
+  "text": "Product name: Citrus Drink\nBrand: Demo Fresh\nEAN: 1234567890123\nCategory: Food\nSupplier: Synthetic Foods GmbH\nPrice: 0 EUR\nCountry of origin: Germany\nWeight: 250g"
+}

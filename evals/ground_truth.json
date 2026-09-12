@@ -1,0 +1,4 @@
+[
+  {"case_id": "clean_food", "note": "Ground truth is stored with each synthetic source case in sample_data/product_cases.json."},
+  {"case_id": "invalid_ean", "note": "Expected routing is review_required."}
+]
