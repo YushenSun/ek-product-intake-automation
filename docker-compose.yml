@@ -18,6 +18,8 @@ services:
       API_BASE_URL: http://backend:8000
     depends_on: [backend]
   n8n:
+    # A new pin is intentionally not guessed: this task host could not run Docker
+    # to validate a different n8n release. See docs/n8n_demo.md before production use.
     image: n8nio/n8n:latest
     ports: ["5678:5678"]
     environment:
@@ -25,6 +27,7 @@ services:
       N8N_PORT: 5678
       N8N_PROTOCOL: http
       WEBHOOK_URL: http://localhost:5678/
+    depends_on: [backend]
     volumes: ["n8n-data:/home/node/.n8n"]
 volumes:
   ek-data:
