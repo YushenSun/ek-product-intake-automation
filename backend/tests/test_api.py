@@ -1,3 +1,7 @@
+from io import BytesIO
+
+from openpyxl import Workbook
+
 GOOD_TEXT = "Product name: API Item\nBrand: Demo\nEAN: 4006381333931\nCategory: Home\nSupplier: Demo\nPrice: 5 EUR"
 BAD_TEXT = "Product name: Needs Review\nBrand: Demo\nCategory: Home\nSupplier: Demo\nPrice: 5 EUR"
 
@@ -70,4 +74,60 @@ def test_api_rejection_and_not_found(client):
 def test_api_rejects_empty_and_unsupported_upload(client):
     assert client.post("/products", json={"source_name": "x", "text": " "}).status_code == 422
     response = client.post("/products/upload", files={"file": ("bad.exe", b"abc", "application/octet-stream")})
+    assert response.status_code == 422
+
+
+def test_csv_batch_upload_list_detail_and_products(client):
+    csv_content = (
+        "Product Name,Brand,EAN,Category,Supplier,Price\n"
+        "First,Demo,2000000000008,Home,Synthetic Supplier,2 EUR\n"
+        "Second,Demo,2000000000015,Home,Synthetic Supplier,3 EUR\n"
+    ).encode()
+    response = client.post(
+        "/batches/upload",
+        files={"file": ("catalogue.csv", csv_content, "text/csv")},
+    )
+    assert response.status_code == 201
+    batch = response.json()
+    assert batch["status"] == "completed"
+    assert batch["total_rows"] == 2
+    assert batch["processed_rows"] == 2
+    assert batch["straight_through_approved"] == 2
+
+    listed = client.get("/batches")
+    assert listed.status_code == 200
+    assert listed.json()[0]["id"] == batch["id"]
+    assert client.get(f"/batches/{batch['id']}").json()["source_name"] == "catalogue.csv"
+
+    products = client.get(f"/batches/{batch['id']}/products")
+    assert products.status_code == 200
+    assert [product["source_row_number"] for product in products.json()] == [2, 3]
+    assert all(product["batch_id"] == batch["id"] for product in products.json())
+
+
+def test_xlsx_batch_upload(client):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Product Name", "Brand", "EAN", "Category", "Supplier", "Price"])
+    sheet.append(["Sheet One", "Demo", "2000000000022", "Home", "Synthetic Supplier", "4 EUR"])
+    sheet.append(["Sheet Two", "Demo", "2000000000039", "Home", "Synthetic Supplier", "5 EUR"])
+    buffer = BytesIO()
+    workbook.save(buffer)
+
+    response = client.post(
+        "/batches/upload",
+        files={"file": ("catalogue.xlsx", buffer.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert response.status_code == 201
+    batch = response.json()
+    assert batch["source_type"] == "xlsx"
+    assert batch["processed_rows"] == 2
+    assert len(client.get(f"/batches/{batch['id']}/products").json()) == 2
+
+
+def test_batch_upload_rejects_unsupported_file(client):
+    response = client.post(
+        "/batches/upload",
+        files={"file": ("catalogue.txt", b"Product: Demo", "text/plain")},
+    )
     assert response.status_code == 422

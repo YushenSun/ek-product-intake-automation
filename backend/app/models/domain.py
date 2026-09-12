@@ -15,6 +15,13 @@ class ProductStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class BatchStatus(str, Enum):
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    COMPLETED_WITH_ERRORS = "completed_with_errors"
+    FAILED = "failed"
+
+
 class Severity(str, Enum):
     INFO = "info"
     WARNING = "warning"
@@ -87,6 +94,8 @@ class ProductResponse(BaseModel):
     source_name: str
     source_type: str
     source_preview: str
+    batch_id: str | None = None
+    source_row_number: int | None = None
     processing_ms: float | None = None
     reviewer_note: str | None = None
     review_required_at: datetime | None = None
@@ -94,6 +103,31 @@ class ProductResponse(BaseModel):
     approved_at: datetime | None = None
     rejected_at: datetime | None = None
     correction_count: int = 0
+
+
+class BatchRowError(BaseModel):
+    row_number: int
+    code: str
+    message: str
+
+
+class BatchResponse(BaseModel):
+    id: str
+    source_name: str
+    source_type: str
+    status: BatchStatus
+    created_at: datetime
+    updated_at: datetime
+    total_rows: int
+    processed_rows: int
+    failed_rows: int
+    row_errors: list[BatchRowError] = Field(default_factory=list)
+    straight_through_approved: int
+    ever_required_human_review: int
+    currently_review_required: int
+    ready_for_approval: int
+    human_approved: int
+    rejected: int
 
 
 class MetricsResponse(BaseModel):

@@ -2,24 +2,34 @@
 
 ## 0:00–0:30 — The business problem
 
-“Supplier product data arrives as prose and spreadsheets. The repetitive work is not just copying: it is normalizing and deciding which records are safe. This independent demo uses synthetic data only.”
+“Suppliers send catalogues with many SKUs. The goal is to automate safe rows, isolate bad rows, and preserve human control. This independent demo uses synthetic data only.”
 
-## 0:30–1:00 — Architecture
+## 0:30–1:30 — Upload a supplier catalogue
 
-Show `docs/architecture.md`. Explain parser → extraction → deterministic checks → SQLite → review queue. Point out that n8n handles workflow integration while the Python service owns domain rules, and that the mock provider makes the demo reliable with no API key.
+Open the Streamlit **Batches** page and upload `sample_data/supplier_catalogue_demo.csv`, or use:
 
-## 1:00–3:00 — Submit two products
+```powershell
+curl.exe -X POST http://localhost:8000/batches/upload -F "file=@sample_data/supplier_catalogue_demo.csv"
+```
 
-Start the stack, open `/docs` and the Streamlit app. Post `sample_data/clean_product.json` to `POST /products`. Show its normalized `0.25 kg → 250 g`, `Deutschland → DE`, valid EAN, and straight-through approved status. Then post `sample_data/problem_product.json`. Highlight invalid EAN, zero price, and missing food information: it becomes `review_required`, rather than being silently accepted.
+Show the batch totals: non-empty rows, ProductRecords created, ingestion failures, straight-through approvals, and review-required products. Point out that the empty spreadsheet row is ignored and failed rows retain their source row number.
 
-## 3:00–4:00 — Human review
+## 1:30–2:15 — Inspect clean automation
 
-In Streamlit filter for `review_required`. Show source preview, evidence, and issue list. Edit the JSON to provide a valid EAN, positive price, ingredients, and allergens, then select **Save corrections**. Show that validation reruns and the record becomes `ready_for_approval`, not `approved`. State the rule: **correction != approval**. Press **Approve** and show that the decision is now attributed as human-approved. Alternatively, reject an unsuitable record.
+Open a straight-through product from the batch. Show `1 kg → 1000 g` or `Deutschland → DE`, its spreadsheet row provenance, and automatic approval attribution.
 
-## 4:00–4:30 — Metrics and evaluation
+## 2:15–3:15 — Inspect an exception
 
-Open `/metrics`. Show that the reviewed record still counts under `ever_required_human_review` after approval, appears under `human_approved`, and never appears under `straight_through_approved`. Explain that straight-through automated approval and human-reviewed approval are different business outcomes. Run `python -m evals.evaluate` and clarify that benchmark numbers are synthetic, not company performance.
+Open the invalid-EAN or incomplete-food product. Show the original labelled row text, deterministic validation issues, and `review_required`. Also show the within-batch duplicate: it is retained and escalated rather than silently dropped.
 
-## 4:30–5:00 — Production roadmap
+## 3:15–4:15 — Correct, then explicitly approve
 
-Import the n8n workflow and show its webhook-to-API-to-status branch. Close with production needs: agreed rules, auth, supplier-data security, audit trails, queues, monitoring, and measured confidence calibration from reviewed outcomes.
+Correct all blocking fields and select **Save corrections**. The record becomes `ready_for_approval`, not approved. State: **correction != approval**. Then press **Approve** and show `approval_source: human`.
+
+## 4:15–4:45 — Historically correct metrics
+
+Return to the batch and Overview pages. The product still counts under `ever_required_human_review`, now counts as `human_approved`, and never counts as `straight_through_approved`.
+
+## 4:45–5:00 — Production boundary
+
+Close with the deliberate PoC limits: synchronous processing, one worksheet, and UTF-8 CSV. Production would add bounded uploads, idempotency, background jobs, security controls, audit trails, and monitoring.

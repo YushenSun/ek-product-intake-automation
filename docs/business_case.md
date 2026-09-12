@@ -2,26 +2,32 @@
 
 ## The manual problem
 
-When supplier product information arrives in different layouts, a category manager has to read a file, copy values into a target format, notice omissions, and check basic data quality. The costly part is not only typing: it is deciding whether the data is trustworthy enough to publish or hand downstream.
+A supplier catalogue may contain tens or hundreds of SKUs. Category managers otherwise have to copy each row, normalize units and country names, check product identifiers, and separately track rows that are incomplete or contradictory. One bad row should not delay every clean SKU in the file.
 
 ## Proposed future workflow
 
-The supplier file enters a small automated intake flow. It creates a common product record, applies the same basic checks every time, and separates clean records from records that need attention. A manager sees only exceptions with the original source, the extracted values, and the reasons for review.
+A manager uploads one CSV or XLSX catalogue. The system processes every non-empty row independently through the same product checks, preserves the spreadsheet row number, and presents a batch summary. Clean products proceed straight through; problematic products enter the review queue; rows that cannot be ingested are shown as explicit failures.
 
-## What AI does—and does not do
+## What automation does—and does not do
 
-An optional LLM can turn unstructured wording into a structured draft. Deterministic code still checks EAN checksums, mandatory information, units, currencies, prices, food fields, conflicts, and duplicates. AI does **not** approve a product on its own, resolve contradictory supplier claims silently, or replace category-manager judgment.
+Automation converts spreadsheet rows into normalized product drafts, validates required information and EANs, normalizes values, and detects duplicates both against existing records and earlier rows in the same batch. It does not silently discard duplicates, guess through structural failures, or turn a reviewer correction into approval.
+
+An optional LLM can still structure text through the existing provider boundary. Batch intake does not introduce new AI behavior or grounding claims.
 
 ## Human control and risks
 
-People can correct, approve, or reject every exception. The design treats missing, invalid, conflicting, or failed extraction as a review item. Risks include wrong extraction, misleading source documents, private supplier data, and integration failures. The PoC limits risk by using synthetic data, explicit validation, no automatic override of errors, and an offline mock provider.
+A reviewer can inspect the original row-derived text, correct a ProductRecord, and then make a separate approve or reject decision. **Correction != approval.** Ingestion failures retain their row number and error message so the supplier file can be corrected.
+
+Risks include incorrect supplier values, ambiguous columns, unexpectedly large files, and repeated submissions. The PoC uses synchronous processing and synthetic data. Production needs upload limits, idempotency, asynchronous processing, access controls, audit records, and monitoring.
 
 ## KPIs and assumptions
 
-Measure the share of records automatically approved, review rate, issue count, processing latency, reviewer correction rate, and false auto-approval rate. The app offers an illustrative “manual minutes avoided” total, based on a configurable assumption (default six minutes per safely auto-approved record). This is not a claim about actual EK workflows, costs, or productivity.
+Useful batch KPIs include rows submitted, products created, ingestion failures, straight-through approvals, products ever requiring review, products currently waiting, products ready for approval, human approvals, and rejections. These distinguish operational throughput from data quality.
+
+The configurable “manual minutes avoided” estimate remains illustrative and applies only to straight-through approvals. No synthetic result represents Eberlein und Kunz performance.
 
 ## PoC to production
 
-**PoC:** validate workflow, rule coverage, and reviewer usability on synthetic examples.  
-**MVP:** pilot with authorized supplier data, agreed field rules, user feedback, and monitored outcomes.  
-**Production:** integrate identity, ERP/PIM destinations, encrypted storage, audit logging, queues/retries, monitoring, and a privacy/security review for any LLM provider.
+**PoC:** demonstrate multi-SKU CSV/XLSX intake, row isolation, review routing, and historically correct counts.  
+**MVP:** agree supplier templates, add file-size limits and idempotency, test with authorized data, and measure reviewer outcomes.  
+**Production:** add identity, encrypted storage, managed persistence, background job processing, retries, audit logging, monitoring, and approved downstream integrations.

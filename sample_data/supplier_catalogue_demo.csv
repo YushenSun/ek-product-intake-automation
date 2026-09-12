@@ -1,0 +1,16 @@
+Product Name,Brand,EAN,SKU,Category,Description,Weight,Ingredients,Allergens,Country of Origin,Packaging,Supplier,Price,Currency
+Alpine Oat Biscuits,Nordhaus,2000000000008,NH-OB-250,Food,Crunchy oat biscuits,0.25 kg,"oats, wheat flour, sugar",gluten,Deutschland,carton,Synthetic Foods GmbH,2.49,EUR
+Citrus Surface Cleaner,BrightHome,2000000000015,BH-CL-500,Household,Citrus household cleaner,500 ml,,,Germany,bottle,Demo Supply GmbH,3.99,EUR
+Citrus Drink,Demo Fresh,1234567890123,DF-CD-330,Beverage,Sparkling citrus drink,330 ml,,,DE,can,Synthetic Drinks GmbH,1.20,EUR
+Bamboo Brush,,2000000000022,ECO-BB-01,Household,Bamboo cleaning brush,,,,DE,sleeve,Demo Supply GmbH,4.50,EUR
+Tomato Soup,Kitchen Demo,2000000000039,KD-TS-400,Food,Tomato soup,400 g,,celery,Italy,can,Synthetic Foods GmbH,2.10,EUR
+Long Grain Rice,Pantry Demo,2000000000046,PD-RI-1000,Food,Long grain rice,1 kg,rice,none,Germany,bag,Synthetic Foods GmbH,3.40,EUR
+Stackable Storage Box,Studio Demo,2000000000053,SD-SB-12,Home,Stackable storage box,0.8 kg,,,Deutschland,carton,Demo Home GmbH,8.00,EUR
+USB-C Cable,Tech Demo,2000000000060,TD-USBC-2,Electronics,Two metre charging cable,90 g,,,DE,box,Synthetic Tech GmbH,not-a-price,EUR
+Alpine Oat Biscuits Family,Nordhaus,2000000000008,NH-OB-500,Food,Family oat biscuit pack,500 g,"oats, wheat flour, sugar",gluten,Deutschland,carton,Synthetic Foods GmbH,4.49,EUR
+Broken Structural Row,Demo,2000000000077,BR-01,Home,Contains an unexpected trailing cell,100 g,,,DE,box,Demo Supply GmbH,5.00,EUR,UNEXPECTED
+
+Scented Candle,Home Demo,2000000000084,HD-SC-01,Home,Synthetic lavender candle,250 g,,,France,jar,Demo Home GmbH,7.00,EUR
+Travel Mug,Outdoor Demo,2000000000091,OD-TM-01,Home,Insulated travel mug,350 g,,,Germany,box,,12.00,EUR
+Apple Sauce,Kitchen Demo,2000000000107,KD-AS-350,Food,Apple sauce,350 g,"apples, sugar",,Germany,jar,Synthetic Foods GmbH,1.80,EUR
+A5 Notebook,Paper Demo,2000000000114,PD-NB-A5,Office,Recycled paper notebook,300 g,,,DE,sleeve,Synthetic Office GmbH,5.00,EUR

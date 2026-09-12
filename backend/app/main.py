@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session
 
 from backend.app.config import settings
 from backend.app.extraction.providers import ExtractionProviderError, provider_from_settings
-from backend.app.models.domain import MetricsResponse, ProductPatch, ProductResponse, ProductStatus, ProductSubmission
+from backend.app.models.domain import BatchResponse, MetricsResponse, ProductPatch, ProductResponse, ProductStatus, ProductSubmission
 from backend.app.parsers import ParseError, parse_file, parse_text
 from backend.app.persistence.database import ProductRecord, SessionLocal
+from backend.app.services.batch import BatchService
 from backend.app.services.intake import IntakeService, NotFoundError
 
 
@@ -22,7 +23,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="EK Product Intake Automation", version="0.2.0", description="Synthetic-data-only product intake case-study PoC.", lifespan=lifespan)
+app = FastAPI(title="EK Product Intake Automation", version="0.3.0", description="Synthetic-data-only product intake case-study PoC.", lifespan=lifespan)
 
 
 def get_session():
@@ -35,6 +36,10 @@ def get_session():
 
 def get_service(session: Session = Depends(get_session)) -> IntakeService:
     return IntakeService(session, provider_from_settings())
+
+
+def get_batch_service(session: Session = Depends(get_session)) -> BatchService:
+    return BatchService(session, provider_from_settings())
 
 
 def as_http_error(error: Exception):
@@ -64,6 +69,35 @@ async def upload_product(file: UploadFile = File(...), service: IntakeService = 
     try:
         parsed = parse_file(file.filename or "upload", await file.read())
         return service.create(parsed.text, file.filename or "upload", parsed.source_type)
+    except Exception as error:
+        as_http_error(error)
+
+
+@app.post("/batches/upload", response_model=BatchResponse, status_code=201)
+async def upload_batch(file: UploadFile = File(...), service: BatchService = Depends(get_batch_service)):
+    try:
+        return service.create(file.filename or "upload", await file.read())
+    except Exception as error:
+        as_http_error(error)
+
+
+@app.get("/batches", response_model=list[BatchResponse])
+def list_batches(service: BatchService = Depends(get_batch_service)):
+    return service.list()
+
+
+@app.get("/batches/{batch_id}", response_model=BatchResponse)
+def get_batch(batch_id: str, service: BatchService = Depends(get_batch_service)):
+    try:
+        return service.get(batch_id)
+    except Exception as error:
+        as_http_error(error)
+
+
+@app.get("/batches/{batch_id}/products", response_model=list[ProductResponse])
+def get_batch_products(batch_id: str, service: BatchService = Depends(get_batch_service)):
+    try:
+        return service.products(batch_id)
     except Exception as error:
         as_http_error(error)
 

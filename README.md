@@ -6,64 +6,90 @@ An end-to-end, local-first PoC for turning heterogeneous supplier product inform
 
 ## Why this exists
 
-Supplier product data often arrives as spreadsheets, PDFs, and free text. Normalizing it manually is slow and error-prone. This prototype parses these inputs, uses an interchangeable extraction provider, applies deterministic business rules, and either auto-approves a record or makes it visible in a small review queue.
+A supplier catalogue commonly contains tens or hundreds of SKUs, while product information also arrives as PDFs or free text. Copying and normalizing every row manually is slow and error-prone. This prototype parses every usable CSV/XLSX row independently, applies the existing extraction and validation pipeline, and isolates failures without losing the rest of the batch.
 
 ## Architecture at a glance
 
-`n8n / supplier input → FastAPI → parser → extraction provider → deterministic validation → SQLite → Streamlit review / export-ready JSON`
+`supplier input → FastAPI → document/batch parser → per-product extraction → deterministic validation → SQLite → Streamlit operations and review`
 
-Python is used for document handling, validation, and the API; n8n is the orchestration boundary that can connect inbound webhooks and downstream systems without embedding integration logic in the application. The optional OpenAI-compatible provider is isolated behind an interface; no LLM decision overrides deterministic rules.
+Python owns document handling, validation, persistence, and the API. The optional OpenAI-compatible provider remains isolated behind an interface; the default deterministic mock provider requires no key. n8n remains an optional orchestration boundary and is not part of the batch-processing implementation.
 
 ## Run locally
 
-```bash
-copy .env.example .env
+```powershell
+Copy-Item .env.example .env
 docker compose up --build
 ```
 
-Open the API documentation at http://localhost:8000/docs, the review app at http://localhost:8501, and n8n at http://localhost:5678; import `n8n/product_intake_workflow.json` into n8n. The default `mock` provider requires no key. Alternatively, without Docker:
+Open the API documentation at http://localhost:8000/docs, the operations app at http://localhost:8501, and n8n at http://localhost:5678. Without Docker:
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+```powershell
+conda create -n ek-intake python=3.12 -y
+conda activate ek-intake
+python -m pip install -r requirements.txt
 uvicorn backend.app.main:app --reload
+```
+
+In another shell:
+
+```powershell
+conda activate ek-intake
 streamlit run review_ui/app.py
 ```
 
-Submit demo data:
+## Supplier batch demo
 
-```bash
-curl -X POST http://localhost:8000/products -H "Content-Type: application/json" -d @sample_data/clean_product.json
-python -m evals.evaluate
-pytest -q
+Upload the synthetic 14-row supplier catalogue:
+
+```powershell
+curl.exe -X POST http://localhost:8000/batches/upload -F "file=@sample_data/supplier_catalogue_demo.csv"
 ```
 
-Files can be uploaded to `POST /products/upload` (CSV, XLSX, PDF, TXT). Plain text and structured submissions use `POST /products`. The generated `n8n/product_intake_workflow.json` imports into a local n8n instance.
+Then inspect:
+
+```powershell
+curl.exe http://localhost:8000/batches
+curl.exe http://localhost:8000/metrics
+```
+
+Each non-empty spreadsheet row retains its original row number. Structurally malformed rows and extraction failures are stored as batch row errors; other rows continue. Every successful row calls the same `IntakeService` used by single-product endpoints, so normalization, validation, database duplicate checks, within-batch duplicate checks, and the human-review state machine are not duplicated.
+
+Existing `POST /products` and `POST /products/upload` behavior remains available. Single spreadsheet uploads continue to process the first usable product, while `POST /batches/upload` is the explicit multi-product endpoint.
+
+## Batch API
+
+- `POST /batches/upload` — synchronously process a CSV or XLSX catalogue.
+- `GET /batches` — list persisted batches with live decision counts.
+- `GET /batches/{batch_id}` — retrieve one batch, including row ingestion errors.
+- `GET /batches/{batch_id}/products` — list its products with source row provenance.
+
+Batch statistics keep `ready_for_approval` separate from final approval and reuse Task 1 history fields. A human-approved product remains part of `ever_required_human_review` and never becomes straight-through.
 
 ## Safety and decision logic
 
-Only initially clean products with every required field, a valid EAN, no conflicts or duplicates, and no validation errors are approved automatically. Missing data, invalid codes, source conflicts, extraction failures, or food records without ingredients/allergens require review.
+Only initially clean products with all required fields, a valid EAN, no conflicts or duplicates, and no validation errors are approved automatically. A duplicate row still becomes a ProductRecord, normally with `review_required`; it is not silently discarded.
 
-For escalated records, **correction != approval**. Saving a correction reruns deterministic validation. Remaining errors keep the record in `review_required`; a valid corrected record becomes `ready_for_approval`. It becomes `approved` only after the reviewer calls the approval endpoint. The application records whether approval was straight-through or human-made, so **straight-through automated approval != human-reviewed approval**.
+For escalated records, **correction != approval**. Saving a correction reruns deterministic validation. Remaining errors keep the record in `review_required`; a valid corrected record becomes `ready_for_approval`. It becomes `approved` only after the reviewer calls the approval endpoint. Therefore **straight-through automated approval != human-reviewed approval**.
 
-Confidence is *not* a sole approval criterion. The mock provider sets confidence to `1.0` only when a field was directly labelled in the source; absent values mean the parser cannot substantiate a confidence. See [docs/architecture.md](docs/architecture.md).
+## Evaluation, metrics, and tests
 
-## Evaluation and metrics
+`evals/evaluate.py` remains the synthetic single-product benchmark. `/metrics` distinguishes straight-through approvals from human approvals and uses persisted history for the historical review rate. Batch endpoints expose the same attribution within each supplier file.
 
-`evals/evaluate.py` benchmarks the mock provider against synthetic ground truth. It reports extraction and normalization accuracy, validation detection, review and approval rates, false auto-approval rate, and latency. These are **synthetic benchmark metrics**, not Eberlein und Kunz results.
+Run the complete offline suite with a repository-local pytest temp directory on Windows:
 
-`/metrics` distinguishes straight-through approvals from human approvals and uses persisted history for the historical review rate. The time-saving estimate applies only to straight-through records and remains a clearly labelled configurable assumption.
+```powershell
+python -m pytest -q --basetemp .pytest_tmp
+```
 
 ## Schema update for existing local databases
 
-This PoC intentionally has no migration framework. The decision-history fields change the SQLite schema, so an existing local demo database must be recreated.
+This PoC intentionally has no migration framework. Task 2 adds the `batches` table plus nullable `batch_id` and `source_row_number` product columns. An existing local demo database must be recreated.
 
 - Local run: stop the app and delete `ek_intake.db`; the next startup recreates it.
-- Docker run: `docker compose down -v` removes the disposable SQLite and n8n demo volumes; then run `docker compose up --build`.
+- Docker run: `docker compose down -v` removes disposable demo volumes; then run `docker compose up --build`.
 
 Both operations delete existing PoC records. Export anything you want to keep first.
 
 ## Limitations and production path
 
-This deliberately excludes authentication, queues, malware scanning, enterprise integrations, and production observability. A production version needs SSO/RBAC, encrypted object storage, audit trails, virus scanning, rate limits, retries and queues, privacy-approved LLM processing, prompt-injection defences, monitoring, and a managed database. See [docs/business_case.md](docs/business_case.md) and [docs/demo_script.md](docs/demo_script.md).
+Batch processing is intentionally synchronous and uses the active worksheet only. CSV input is UTF-8. A production version needs bounded upload sizes, asynchronous job execution for large catalogues, SSO/RBAC, encrypted storage, audit events, malware scanning, rate limits, retries, observability, and a managed database. See [docs/business_case.md](docs/business_case.md), [docs/architecture.md](docs/architecture.md), and [docs/demo_script.md](docs/demo_script.md).

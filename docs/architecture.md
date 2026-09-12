@@ -1,52 +1,64 @@
 # Architecture
 
-This PoC has one deployable backend and one lightweight human-review app. Its boundaries are intentional: document parsing, extraction, validation, and persistence remain independently testable and replaceable.
+This PoC has one deployable backend and one lightweight Streamlit operations app. Batch intake extends the existing product pipeline rather than creating a second validation path.
 
 ```mermaid
 flowchart LR
-  S[Synthetic supplier TXT / CSV / XLSX / PDF] --> N[n8n webhook / trigger]
-  N --> A[FastAPI intake API]
-  A --> P[Deterministic parser]
-  P --> X{ExtractionProvider}
-  X --> M[Mock provider]
-  X --> L[OpenAI-compatible LLM\nstructured JSON]
-  M --> V[Deterministic validation\nnormalization + duplicate check]
-  L --> V
+  S[Supplier CSV / XLSX] --> BA[Batch upload API]
+  BA --> BP[Batch parser\nall non-empty rows + row numbers]
+  BP -->|each valid row| X[Existing ExtractionProvider]
+  BP -->|structural failure| BE[(Batch row errors)]
+  X -->|extraction failure| BE
+  X --> V[Existing deterministic validation\nnormalization + duplicate detection]
   V --> D{Initial decision}
   D -->|clean| AA[Straight-through approved]
-  D -->|blocking error| R[Review required]
+  D -->|blocking issue / duplicate| R[Review required]
   R --> U[Streamlit correction]
   U --> V2[Deterministic revalidation]
   V2 -->|errors remain| R
-  V2 -->|no blocking errors| RA[Ready for approval]
+  V2 -->|valid| RA[Ready for approval]
   RA -->|explicit reviewer approval| HA[Human-approved]
-  R -->|explicit rejection| RJ[Rejected]
-  AA --> DB[(SQLite + decision history)]
+  R -->|reject| RJ[Rejected]
+  AA --> DB[(SQLite\nbatches + products + history)]
+  R --> DB
   HA --> DB
   RJ --> DB
-  DB --> O[JSON downstream boundary]
+  DB --> UI[Overview / Batches / Review Queue]
+
+  O[Single PDF / TXT / CSV / XLSX] --> SI[Existing single-product endpoints]
+  SI --> X
 ```
 
 ## Components and data flow
 
-1. `POST /products` accepts labelled text; `POST /products/upload` accepts a CSV, XLSX, PDF, or TXT. Parsers produce plain, inspectable text and reject unsupported, empty, or malformed files.
-2. An `ExtractionProvider` produces a Pydantic `Product` and optional evidence. `MockExtractionProvider` reads explicit field labels deterministically. `OpenAIExtractionProvider` requests JSON-schema structured output and validates it with Pydantic before it can enter the workflow.
-3. Validation normalizes weight, country, and currency and independently applies required-field, checksum, price, food, conflict, and duplicate rules.
-4. On initial intake, any error-level issue produces `review_required`; otherwise the record is straight-through `approved`.
-5. A reviewer PATCH is a correction, not an approval. Validation reruns: error-level issues keep `review_required`, while a valid correction produces `ready_for_approval`. Only the explicit approve endpoint produces a human approval.
+1. `POST /batches/upload` accepts CSV or XLSX and persists a processing batch.
+2. The first non-empty spreadsheet row is the header. Every later non-empty row is converted to labelled text with its original row number. Missing cells are allowed; completely empty rows are ignored.
+3. Structurally malformed rows become persisted `BatchRowError` entries. Each remaining row independently calls the existing `IntakeService`.
+4. Extraction, normalization, deterministic validation, duplicate detection, and Task 1 decision history therefore have one implementation.
+5. Products store nullable `batch_id` and `source_row_number`; existing single-product intake remains compatible.
+6. Batch counts are derived from current product state plus persisted historical attribution. `ready_for_approval` is not final approval.
 
-## State and historical metrics
+## Duplicate handling
 
-SQLite persists the current and initial status, decision source, approval source, review/approval/rejection timestamps, and correction count. This is intentionally smaller than a full audit-event system. It is sufficient to keep the historical human-review rate stable after a record is approved and to distinguish straight-through automated approval from human-reviewed approval.
+The product service checks the database before every insert. Earlier rows in a synchronous batch have already been committed, so a later matching EAN or product/supplier combination is detected exactly like a product from an older batch. The duplicate is persisted as a ProductRecord with a blocking issue and routed to human review.
 
-The schema is created directly by SQLAlchemy. Existing PoC databases must be deleted and recreated after this schema change; no Alembic migration is included.
+## Row isolation and batch status
 
-## System boundaries and failure modes
+Parser failures and per-row extraction failures are recorded with row number, code, and message. The service rolls back only the failed row and continues.
 
-Supplier text is untrusted. The parser has file and size boundaries; production would add antivirus scanning and object storage. The LLM is an optional external boundary: missing credentials, timeouts, non-JSON responses, and schema violations become explicit 422 failures rather than accepted records. Pydantic rejects unknown structured fields. SQLite errors are allowed to surface as server errors and must be captured by production monitoring/retry policy.
+- `completed`: every non-empty data row produced a ProductRecord.
+- `completed_with_errors`: at least one ProductRecord was created and at least one row failed ingestion.
+- `failed`: no ProductRecord could be created.
+- `processing`: transient synchronous processing state.
 
-The review boundary is deliberate: **correction != approval**. Approval is blocked whenever error-level findings remain, and a corrected escalated record waits for an explicit human decision. This PoC does not treat probability as truth: mock `1.0` means only “a labelled source line was found”; the optional LLM provider emits no invented confidence. In production, confidence calibration would be measured from reviewed historical examples.
+Product validation issues do not make the batch an ingestion failure; they create reviewable ProductRecords.
 
-## Production hardening
+## Persistence and schema
 
-Add authentication and role-based authorization, supplier-data retention controls, encrypted storage, audit events, a managed DB, queues/retries, rate limiting, observability, file scanning, integration credentials in a secret manager, and privacy-approved LLM controls. Treat prompt injection in document text as hostile input; isolate it from system instructions, minimize retrieved context, and retain reviewer oversight.
+SQLite stores a lightweight BatchRecord, JSON row errors, and product provenance. No relationship layer or full audit-event system is added. Task 1 approval history remains authoritative for straight-through versus human approval.
+
+SQLAlchemy creates the schema directly. Existing PoC databases must be deleted and recreated after this change; no Alembic migration is included.
+
+## Boundaries and limitations
+
+The implementation is synchronous and intended for a PoC-sized catalogue. It reads one active XLSX worksheet and UTF-8 CSV. Production would add file-size limits, antivirus scanning, durable file storage, asynchronous workers, idempotency, audit events, and operational monitoring.

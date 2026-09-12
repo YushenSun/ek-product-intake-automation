@@ -34,6 +34,8 @@ class IntakeService:
             source_name=record.source_name,
             source_type=record.source_type,
             source_preview=record.source_preview,
+            batch_id=record.batch_id,
+            source_row_number=record.source_row_number,
             processing_ms=record.processing_ms,
             reviewer_note=record.reviewer_note,
             review_required_at=record.review_required_at,
@@ -64,7 +66,15 @@ class IntakeService:
     def _initial_decision(issues: list[ValidationIssue]) -> ProductStatus:
         return ProductStatus.REVIEW_REQUIRED if any(issue.severity == Severity.ERROR for issue in issues) else ProductStatus.APPROVED
 
-    def create(self, text: str, source_name: str, source_type: str) -> ProductResponse:
+    def create(
+        self,
+        text: str,
+        source_name: str,
+        source_type: str,
+        *,
+        batch_id: str | None = None,
+        source_row_number: int | None = None,
+    ) -> ProductResponse:
         started = perf_counter()
         result = self.provider.extract(text, source_name)
         product, issues = validate_product(result.product)
@@ -80,6 +90,8 @@ class IntakeService:
             initial_status=initial_status.value,
             decision_source="automatic" if initial_status == ProductStatus.APPROVED else "pending_review",
             approval_source="automatic" if initial_status == ProductStatus.APPROVED else None,
+            batch_id=batch_id,
+            source_row_number=source_row_number,
             review_required_at=now if initial_status == ProductStatus.REVIEW_REQUIRED else None,
             approved_at=now if initial_status == ProductStatus.APPROVED else None,
             product_json=dump(product.model_dump()),
