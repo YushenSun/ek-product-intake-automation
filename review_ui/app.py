@@ -9,6 +9,10 @@ st.set_page_config(page_title="EK Intake Review", layout="wide")
 st.title("EK Product Intake — review queue")
 st.caption("Synthetic-data-only PoC. Correction does not equal approval; reviewed records require an explicit approval decision.")
 
+notice = st.session_state.pop("workflow_notice", None)
+if notice:
+    (st.success if notice["kind"] == "success" else st.warning)(notice["message"])
+
 
 def decision_label(product: dict) -> str:
     if product["status"] == "approved":
@@ -63,9 +67,16 @@ with right:
             response.raise_for_status()
             saved = response.json()
             if saved["status"] == "ready_for_approval":
-                st.success("Corrections saved and validation passed. The product is ready for explicit approval.")
+                st.session_state["workflow_notice"] = {
+                    "kind": "success",
+                    "message": "Corrections saved and validation passed. The product is ready for explicit approval.",
+                }
             else:
-                st.warning("Corrections saved and validation rerun. Blocking issues remain.")
+                st.session_state["workflow_notice"] = {
+                    "kind": "warning",
+                    "message": "Corrections saved and validation rerun. Blocking issues remain.",
+                }
+            st.rerun()
         except Exception as exc:
             st.error(f"Could not save: {exc}")
 
@@ -73,8 +84,16 @@ with right:
     can_approve = selected["status"] == "ready_for_approval"
     if approve.button("Approve", disabled=not can_approve, help="Available only after corrections pass validation."):
         response = httpx.post(f"{API}/products/{selected['id']}/approve", timeout=8)
-        st.success("Human approval recorded.") if response.is_success else st.error(response.text)
+        if response.is_success:
+            st.session_state["workflow_notice"] = {"kind": "success", "message": "Human approval recorded."}
+            st.rerun()
+        else:
+            st.error(response.text)
 
     if reject.button("Reject", disabled=selected["status"] == "rejected"):
         response = httpx.post(f"{API}/products/{selected['id']}/reject", timeout=8)
-        st.success("Rejected.") if response.is_success else st.error(response.text)
+        if response.is_success:
+            st.session_state["workflow_notice"] = {"kind": "success", "message": "Product rejected."}
+            st.rerun()
+        else:
+            st.error(response.text)
