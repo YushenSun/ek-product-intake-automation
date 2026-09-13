@@ -4,6 +4,20 @@
 
 An end-to-end, local-first PoC for turning heterogeneous supplier product information into reviewable, normalized product records. It demonstrates a practical automation principle: **automate safe, repetitive work and send uncertainty to people.** All included data is synthetic.
 
+## What this demonstrates
+
+- Supplier catalogue automation with multi-product CSV/XLSX batch intake.
+- Deterministic validation and human-in-the-loop review, with explicit approval separate from correction.
+- n8n orchestration, FastAPI business logic, and a Streamlit internal review UI.
+
+**Validated synthetic demo:** 14 non-empty catalogue rows → 12 products processed (6 straight-through approved, 6 routed to human review) and 2 row-level ingestion failures isolated.
+
+<!-- Screenshots to add manually; do not render links until the files exist:
+     docs/images/n8n-workflow.png — n8n workflow overview
+     docs/images/overview-dashboard.png — Streamlit overview dashboard
+     docs/images/ready-for-approval.png — ready-for-approval human review screen
+-->
+
 ## Why this exists
 
 A supplier catalogue commonly contains tens or hundreds of SKUs, while product information also arrives as PDFs or free text. Copying and normalizing every row manually is slow and error-prone. This prototype parses every usable CSV/XLSX row independently, applies the existing extraction and validation pipeline, and isolates failures without losing the rest of the batch.
@@ -123,6 +137,6 @@ Both operations delete existing PoC records. Export anything you want to keep fi
 
 Batch processing is synchronous and uses the active worksheet only. CSV input is UTF-8. The n8n placeholders do not send real messages or publish data downstream, and the workflow uses n8n's default fail-fast HTTP behavior rather than a production retry policy.
 
-The Compose file retains the repository's existing `n8nio/n8n:latest` tag because Docker was unavailable in the implementation environment, so a different release could not be validated honestly. Before production, validate the workflow against an approved n8n release and pin that version or digest. Production also needs bounded uploads, idempotency, background jobs, authentication, authorization, secret management, audit events, retry/alert policies, observability, and an approved downstream connector.
+The Compose stack pins the locally validated `n8nio/n8n:2.38.7` image and uses `N8N_WEBHOOK_URL=http://localhost:5678/` for browser-facing webhook URLs. Production also needs bounded uploads, idempotency, background jobs, authentication, authorization, secret management, audit events, retry/alert policies, observability, and an approved downstream connector.
 
 See [docs/business_case.md](docs/business_case.md), [docs/architecture.md](docs/architecture.md), [docs/demo_script.md](docs/demo_script.md), and [docs/n8n_demo.md](docs/n8n_demo.md).
