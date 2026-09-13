@@ -185,6 +185,6 @@ The three Edit Fields nodes are credential-free integration seams:
 
 After explicit approval, a small downstream workflow could receive an approved product ID, call `GET http://backend:8000/products/{id}/export`, and deliver the export-ready JSON to an approved PIM, ERP, or catalogue API. This repository intentionally does not perform that external write.
 
-## 10. Image-version note
+## 10. Validated local runtime
 
-The Compose file keeps its pre-existing `n8nio/n8n:latest` image. Docker was unavailable in the task execution host, so changing to a guessed release would not have provided real compatibility validation. Before a production release, run the imported workflow against an organization-approved n8n version, pin that version or immutable digest, and record the compatibility result.
+The full local Docker demo was validated with `n8nio/n8n:2.38.7`: multipart CSV upload, batch processing, review and row-error routing, and correction → ready for approval → explicit approval. Compose uses `N8N_WEBHOOK_URL=http://localhost:5678/` for the local browser-facing webhook URL. Production deployment still requires its own security and operational validation.
